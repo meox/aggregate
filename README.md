@@ -1,5 +1,5 @@
 # Aggregation Tool 1.1
-fast C++ tool to aggragate csv
+fast C++11 tool to aggragate csv
 
 ###command line options
 ```

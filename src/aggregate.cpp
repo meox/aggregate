@@ -258,7 +258,7 @@ int main(int argc, char* argv[])
     // save
     ofstream fout{output_file};
 
-    if (!header_lines.empty())
+    if (!header_lines.empty() && reuse_skipped)
     {
         for (const auto& e : header_lines)
             fout << e << endl;
@@ -340,7 +340,7 @@ void dry_run (
     {
         string line;
         vector<string> strs;
-        
+
         ifstream f{fnames[0]};
         const auto sep = boost::is_any_of(input_sep);
         getline(f, line);

@@ -1,0 +1,14 @@
+language: cpp
+
+compiler:
+    - gcc
+
+
+before_install:
+    - if [ $TRAVIS_OS_NAME == linux ]; then sudo apt-get update && sudo apt-get install -y libboost-dev; fi
+
+script: ./compile.sh
+
+os:
+    - linux
+

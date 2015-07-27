@@ -1,13 +1,21 @@
+sudo: false
 language: cpp
 
 compiler:
     - gcc
 
-gcc:
-  - "4.7"
+install:
+- if [ "$CXX" = "g++" ]; then export CXX="g++-4.8" CC="gcc-4.8"; fi
+addons:
+  apt:
+    sources:
+    - ubuntu-toolchain-r-test
+    packages:
+    - gcc-4.8
+    - g++-4.8
 
 before_install:
-    - if [ $TRAVIS_OS_NAME == linux ]; then sudo apt-get update && sudo apt-get install -y libboost-dev; fi
+    - if [ $TRAVIS_OS_NAME == linux ]; then sudo apt-get update && sudo apt-get install -y libboost-dev libboost-filesystem; fi
 
 script: ./compile.sh
 

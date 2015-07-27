@@ -31,18 +31,16 @@ struct mapval_t
 
 
 template <typename F>
-vector<string> splitter(const string& fname, const string& separator, F fun, size_t skip_line)
+void splitter(const string& fname, const string& separator, F fun, size_t skip_line)
 {
     ifstream f{fname};
     string line;
     const auto sep = boost::is_any_of(separator);
     size_t skipped{0};
-    vector<string> header_lines;
 
     while(f && skipped < skip_line)
     {
         getline(f, line);
-        header_lines.push_back(line);
         skipped++;
     }
 
@@ -57,9 +55,6 @@ vector<string> splitter(const string& fname, const string& separator, F fun, siz
             fun(strs);
         }
     }
-
-    f.close();
-    return header_lines;
 }
 
 
@@ -109,6 +104,7 @@ void dry_run(
     vector<string>& sum_fields,
     vector<string>& proj_fields,
     const map<string, string>& registers,
+    const string& output_header,
     const string& input_sep);
 
 
@@ -120,8 +116,9 @@ int main(int argc, char* argv[])
     vector<string> keys_fields{}, sum_fields{}, proj_fields{};
     map<string, string> registers;
 
-    bool dry_run_exec{false}, reuse_skipped{false}, multi_thread{false};
+    bool dry_run_exec{false}, multi_thread{false};
     size_t skip_line{0};
+    string output_header{};
 
     vector<string> header_lines{};
     vector<string> fnames{};
@@ -152,8 +149,10 @@ int main(int argc, char* argv[])
             skip_line = stoi(argv[++i]);
         else if (strcmp(argv[i], "-f") == 0)
             fnames.push_back(argv[++i]);
-        else if (strcmp(argv[i], "--reuse-skipped") == 0)
-            reuse_skipped = true;
+        else if (strcmp(argv[i], "--set-header") == 0)
+        {
+            output_header = argv[++i];
+        }
         else if (strcmp(argv[i], "--no-value") == 0)
             no_value = std::string{argv[++i]};
         else if (strcmp(argv[i], "--path") == 0)
@@ -195,14 +194,14 @@ int main(int argc, char* argv[])
 
     if (dry_run_exec)
     {
-        dry_run(fnames, keys_fields, sum_fields, proj_fields, registers, input_sep);
+        dry_run(fnames, keys_fields, sum_fields, proj_fields, registers, output_header, input_sep);
         return 0;
     }
 
 
     for (const auto& fname : fnames)
     {
-        const auto h = splitter(fname, input_sep,
+        splitter(fname, input_sep,
                     [&map_object, &sum_fields, &proj_fields, &keys_fields, &no_value](const vector<string>& v) {
             string key = build_key(keys_fields, v);
 
@@ -261,19 +260,15 @@ int main(int argc, char* argv[])
                 map_object[key].prj_val = partial_prj;
             }
         }, skip_line);
-
-        if (header_lines.empty())
-            header_lines = h;
     }
 
 
     // save
     ofstream fout{output_file};
 
-    if (!header_lines.empty() && reuse_skipped)
+    if (!output_header.empty())
     {
-        for (const auto& e : header_lines)
-            fout << e << endl;
+        fout << output_header << endl;
     }
 
 
@@ -338,6 +333,7 @@ void dry_run (
     vector<string>& sum_fields,
     vector<string>& proj_fields,
     const map<string,string>& registers,
+    const string& output_header,
     const string& input_sep)
 {
     // show files
@@ -364,6 +360,7 @@ void dry_run (
         cout << "aggr size:\t" << sum_fields.size() << endl;
         cout << "prj size:\t" << proj_fields.size() << endl;
         cout << "Key:\t" << key << endl;
+        cout << "Output Header:\t" << output_header << endl;
 
         // list of element not use in projection
         {
@@ -447,11 +444,11 @@ void help()
     cout << " --skip-line      number of rows (starting from head) to skip" << endl;
     cout << " -f               is the file to load (coudl be used serveral times)" << endl;
     cout << " --path           is the path where to find csv input files" << endl;
-    cout << " --reuse-skipped  if present the skipped line will be reinserted into the output file" << endl;
     cout << " --input-sep      is the csv input separator" << endl;
     cout << " --output-sep     is the csv output separator" << endl;
     cout << " --output-file    is the output file" << endl;
     cout << " --no-value       specify witch is the \"no value\" (default: \"-1\")" << endl;
+    cout << " --set-header     specify the header to use for the output csv" << endl;
     cout << " --dry-run        execute some test on input parameter" << endl;
     cout << " --help           print this help and exit" << endl;
     cout << " --version        print the version number and exit" << endl;

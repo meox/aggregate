@@ -22,6 +22,6 @@ aggregate [options]
 ```
 
 This is an example:
-```
+
 ./aggregate -r %t:1982 -k "2-20" -s "21-35" -p "%t;1-35" --skip-line 1 --path /home/meox/rawcsv --reuse-skipped --output-file out.csv
-```
+

@@ -15,6 +15,9 @@
  */
 
 
+#define VERSION "1.2.0"
+
+
 using namespace boost::filesystem;
 using namespace std;
 
@@ -47,7 +50,7 @@ vector<string> splitter(const string& fname, const string& separator, F fun, siz
     {
         getline(f, line);
         
-        if (line.size() > 1)
+        if (!line.empty())
         {
             vector<string> strs;
             boost::split(strs, line, sep);
@@ -130,7 +133,15 @@ int main(int argc, char* argv[])
     while(i < argc)
     {
         if (strcmp(argv[i], "--help") == 0)
+        {
             help();
+            return 0;
+        }
+        else if (strcmp(argv[i], "--version") == 0)
+        {
+            cout << "Aggregation Tool " << VERSION << " compiled on " << __DATE__ << "@" << __TIME__ << endl << endl;
+            return 0;
+        }
         else if (strcmp(argv[i], "-k") == 0)
             keys_fields = get_index(argv[++i]);
         else if (strcmp(argv[i], "-s") == 0)
@@ -185,12 +196,13 @@ int main(int argc, char* argv[])
     if (dry_run_exec)
     {
         dry_run(fnames, keys_fields, sum_fields, proj_fields, registers, input_sep);
+        return 0;
     }
 
 
     for (const auto& fname : fnames)
     {
-        const auto h = splitter( fname, input_sep,
+        const auto h = splitter(fname, input_sep,
                     [&map_object, &sum_fields, &proj_fields, &keys_fields, &no_value](const vector<string>& v) {
             string key = build_key(keys_fields, v);
 
@@ -421,13 +433,12 @@ void dry_run (
 
         cout << endl;
     }
-    exit(0);
 }
 
 
 void help()
 {
-    cout << "Aggregation Tool 1.1 compiled on " << __DATE__ << "@" << __TIME__ << endl << endl;
+    cout << "Aggregation Tool " << VERSION << " compiled on " << __DATE__ << "@" << __TIME__ << endl << endl;
     cout << "aggregate [options]" << endl << endl;
     cout << " -k               are the keys-elements used for aggregation" << endl;
     cout << " -s               are the sums-elements used for aggregation" << endl;
@@ -442,10 +453,11 @@ void help()
     cout << " --output-file    is the output file" << endl;
     cout << " --no-value       specify witch is the \"no value\" (default: \"-1\")" << endl;
     cout << " --dry-run        execute some test on input parameter" << endl;
+    cout << " --help           print this help and exit" << endl;
+    cout << " --version        print the version number and exit" << endl;
 
     cout << endl;
     cout << "ex: ./aggregate -r %t:1982 -k \"2-20\" -s \"21-35\" -p \"%t;1-35\" --skip-line 1 --path /ssd/BI_SUB_UP_ACT_RAW --reuse-skipped --output-file out.csv" << endl;
     cout << endl;
-    exit(0);
 }
 

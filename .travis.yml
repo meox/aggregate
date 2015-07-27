@@ -10,6 +10,7 @@ addons:
   apt:
     sources:
     - ubuntu-toolchain-r-test
+    - ppa.launchpad.net/boost-latest/ppa/ubuntu
     packages:
     - gcc-4.9
     - g++-4.9

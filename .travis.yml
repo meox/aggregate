@@ -14,7 +14,7 @@ addons:
     - gcc-4.9
     - g++-4.9
     - libboost-dev
-    - libboost-filesystem
+    - libboost-filesystem-dev
 
 
 script: ./compile.sh

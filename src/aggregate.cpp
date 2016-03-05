@@ -15,12 +15,14 @@
  */
 
 
-#define VERSION "1.2.0"
+#define VERSION "1.2.1"
 
 
 using namespace boost::filesystem;
 using namespace std;
 
+
+typedef pair<int64_t, bool> pval_t;
 
 template <typename T>
 struct mapval_t
@@ -58,10 +60,34 @@ void splitter(const string& fname, const string& separator, F fun, size_t skip_l
 }
 
 
-vector<string> get_index(const string& index)
+vector<uint32_t> get_index_uint32(const string& index)
+{
+    vector<uint32_t> indexs;
+    const auto sep = boost::is_any_of(";");
+
+    vector<string> k_strs;
+    boost::split(k_strs, index, sep);
+
+    for(const auto& k : k_strs)
+    {
+        auto p = k.find("-");
+        if(p != string::npos)
+        {
+            const auto b = stoi(k.substr(0, p));
+            const auto e = stoi(k.substr(p+1));
+            for(size_t n = b; n <= e; n++)
+                indexs.push_back(n);
+        }
+        else
+            indexs.push_back(std::stoi(k));
+    }
+
+    return indexs;
+}
+
+vector<string> get_index_string(const string& index)
 {
     vector<string> indexs;
-
     const auto sep = boost::is_any_of(";");
 
     vector<string> k_strs;
@@ -78,21 +104,19 @@ vector<string> get_index(const string& index)
                 indexs.push_back(to_string(n));
         }
         else
-        {
             indexs.push_back(k);
-        }
     }
 
     return indexs;
 }
 
 
-string build_key(const vector<string> key_index, const vector<string>& line)
+string build_key(const vector<uint32_t>& key_index, const vector<string>& line)
 {
     const auto line_size = line.size();
     stringstream s{};
 
-    for(const auto& k : key_index) { s << line[stoi(k)] << "#"; }
+    for(const auto& k : key_index) { s << line[k] << "#"; }
     return s.str();
 }
 
@@ -100,8 +124,8 @@ string build_key(const vector<string> key_index, const vector<string>& line)
 void help();
 void dry_run(
     const vector<string>& fnames,
-    vector<string>& keys_fields,
-    vector<string>& sum_fields,
+    vector<uint32_t>& keys_fields,
+    vector<uint32_t>& sum_fields,
     vector<string>& proj_fields,
     const map<string, string>& registers,
     const string& output_header,
@@ -111,9 +135,12 @@ void dry_run(
 
 int main(int argc, char* argv[])
 {
-    unordered_map<string, mapval_t<uint64_t>> map_object;
+    unordered_map<string, mapval_t<int64_t>> map_object;
 
-    vector<string> keys_fields{}, sum_fields{}, proj_fields{};
+    vector<uint32_t> sum_fields;
+    vector<uint32_t> keys_fields;
+    vector<string> proj_fields;
+
     map<string, string> registers;
 
     bool dry_run_exec{false}, multi_thread{false};
@@ -122,7 +149,7 @@ int main(int argc, char* argv[])
 
     vector<string> header_lines{};
     vector<string> fnames{};
-    std::string no_value{"-1"};
+    int64_t no_value{-1};
     string input_sep{","}, output_sep{","};
     string output_file{"out.csv"};
 
@@ -140,21 +167,19 @@ int main(int argc, char* argv[])
             return 0;
         }
         else if (strcmp(argv[i], "-k") == 0)
-            keys_fields = get_index(argv[++i]);
+            keys_fields = get_index_uint32(argv[++i]);
         else if (strcmp(argv[i], "-s") == 0)
-            sum_fields = get_index(argv[++i]);
+            sum_fields = get_index_uint32(argv[++i]);
         else if (strcmp(argv[i], "-p") == 0)
-            proj_fields = get_index(argv[++i]);
+            proj_fields = get_index_string(argv[++i]);
         else if (strcmp(argv[i], "--skip-line") == 0)
             skip_line = stoi(argv[++i]);
         else if (strcmp(argv[i], "-f") == 0)
             fnames.push_back(argv[++i]);
         else if (strcmp(argv[i], "--set-header") == 0)
-        {
             output_header = argv[++i];
-        }
         else if (strcmp(argv[i], "--no-value") == 0)
-            no_value = std::string{argv[++i]};
+            no_value = std::stoi(std::string{argv[++i]});
         else if (strcmp(argv[i], "--path") == 0)
         {
             const string f_path = argv[++i];
@@ -198,68 +223,69 @@ int main(int argc, char* argv[])
         return 0;
     }
 
+    const auto non_valid = make_pair(0, false);
+
+    //( value , is_valid )
+    vector<pair<int64_t, bool>> partial(sum_fields.size());
+    vector<string> partial_prj(proj_fields.size());
 
     for (const auto& fname : fnames)
     {
-        splitter(fname, input_sep,
-                    [&map_object, &sum_fields, &proj_fields, &keys_fields, &no_value](const vector<string>& v) {
-            string key = build_key(keys_fields, v);
-
-            //        ( value , is_valid )
-            typedef pair<uint64_t, bool> pval_t;
-            vector<pair<uint64_t, bool>> partial;
-            for(const auto& i : sum_fields)
+        splitter(fname, input_sep, [&map_object, &sum_fields, &proj_fields, &keys_fields, &no_value, &non_valid, &partial, &partial_prj](const vector<string>& v)
             {
-                uint64_t n{};
-                size_t index = stoi(i);
-                if(v[index] == no_value)
+                size_t j{};
+                for(const auto& index : sum_fields)
                 {
-                    partial.push_back(make_pair(0, false));
-                }
-                else
-                {
-                    try { n = stoul(v[index]); }
-                    catch(...) {}
-                    partial.push_back(make_pair(n, true));
-                }
-            }
-
-            vector<string> partial_prj;
-            for(const auto& i : proj_fields)
-            {
-                if (i.find("%") == string::npos)
-                    partial_prj.push_back(v[stoi(i)]);
-                else
-                    partial_prj.push_back("");
-            }
-
-            auto it = map_object.find(key);
-            if(it != map_object.end())
-            {
-                //exists
-                transform(
-                    it->second.sum_val.begin(), it->second.sum_val.end(),
-                    partial.begin(), it->second.sum_val.begin(),
-                    [](const pval_t& a, const pval_t& b)
+                    int64_t n = std::stol(v[index]);
+                    if(n != no_value)
                     {
-                        constexpr uint64_t zero{};
-                        if (a.second == true && b.second == true)
-                            return make_pair(a.first + b.first, true);
-                        else if (a.second == true && b.second == false)
-                            return make_pair(a.first, true);
-                        else if (a.second == false && b.second == true)
-                            return make_pair(b.first, true);
-                        else
-                            return make_pair(zero, false);
+                        partial[j] = make_pair(n, true);
                     }
-                );
-            }
-            else
-            {
-                map_object[key].sum_val = partial;
-                map_object[key].prj_val = partial_prj;
-            }
-        }, skip_line);
+                    else
+                    {
+                        partial[j] = non_valid;
+                    }
+                    j++;
+                }
+
+                j = 0;
+                for(const auto& i : proj_fields)
+                {
+                    if (i.find("%") == string::npos)
+                        partial_prj[j] = v[stoi(i)];
+                    else
+                        partial_prj[j].clear();
+                    j++;
+                }
+
+                string key = build_key(keys_fields, v);
+                auto it = map_object.find(key);
+                if(it != map_object.end())
+                {
+                    //exists
+                    transform(
+                        it->second.sum_val.begin(), it->second.sum_val.end(),
+                        partial.begin(), it->second.sum_val.begin(),
+                        [](const pval_t& a, const pval_t& b)
+                        {
+                            constexpr int64_t zero{};
+                            if (a.second == true && b.second == true)
+                                return make_pair(a.first + b.first, true);
+                            else if (a.second == true && b.second == false)
+                                return make_pair(a.first, true);
+                            else if (a.second == false && b.second == true)
+                                return make_pair(b.first, true);
+                            else
+                                return make_pair(zero, false);
+                        }
+                    );
+                }
+                else
+                {
+                    map_object[key].sum_val = partial;
+                    map_object[key].prj_val = partial_prj;
+                }
+            }, skip_line);
     }
 
 
@@ -267,47 +293,43 @@ int main(int argc, char* argv[])
     ofstream fout{output_file};
 
     if (!output_header.empty())
-    {
         fout << output_header << endl;
-    }
 
 
-    auto get = [&sum_fields, &proj_fields, &no_value](const string& k, const mapval_t<uint64_t>& o) -> string {
-        auto it = find(sum_fields.begin(), sum_fields.end(), k);
+    auto get = [&sum_fields, &proj_fields, &no_value](uint32_t k, const mapval_t<int64_t>& o, auto printer) {
+        const auto it = find(sum_fields.begin(), sum_fields.end(), k);
         if (it != sum_fields.end())
         {
             // is a sum fields
             const auto v = o.sum_val[it - sum_fields.begin()];
             if (v.second)
-                return to_string(v.first);
+                printer(v.first);
             else
-                return no_value;
+                printer(no_value);
         }
         else
         {
-            auto pos = find(proj_fields.begin(), proj_fields.end(), k);
-            return o.prj_val[pos - proj_fields.begin()];
+            const auto pos = find(proj_fields.begin(), proj_fields.end(), to_string(k));
+            printer(o.prj_val[pos - proj_fields.begin()]);
         }
     };
 
 
-    auto print = [&output_sep, &fout](const string& v, bool& f) {
+    auto print = [&output_sep, &fout](const auto& v, bool& f) {
         if (f) { fout << v; f = false; }
         else
-        {
             fout << output_sep << v;
-        }
     };
 
 
-    auto print_line = [&proj_fields, &registers, &print, &get](const mapval_t<uint64_t>& o) {
+    auto print_line = [&proj_fields, &registers, &print, &get](const mapval_t<int64_t>& o) {
         bool f{true};
         for (const auto& i : proj_fields)
         {
             if (i.find("%") == 0)
                 print(registers[i], f);
             else
-                print(get(i, o), f);
+                get(std::stoi(i), o, [&](const auto& v){ print(v, f); });
         }
     };
 
@@ -329,8 +351,8 @@ int main(int argc, char* argv[])
 
 void dry_run (
     const vector<string>& fnames,
-    vector<string>& keys_fields,
-    vector<string>& sum_fields,
+    vector<uint32_t>& keys_fields,
+    vector<uint32_t>& sum_fields,
     vector<string>& proj_fields,
     const map<string,string>& registers,
     const string& output_header,
@@ -353,6 +375,12 @@ void dry_run (
         const auto sep = boost::is_any_of(input_sep);
         getline(f, line);
         boost::split(strs, line, sep);
+
+        if (strs.size() == 1)
+        {
+            cout << "Bad separator: size = " << strs.size() << endl;
+            return;
+        }
 
         string key = build_key(keys_fields, strs);
         cout << "#fields:\t" << strs.size() << endl;
@@ -395,7 +423,7 @@ void dry_run (
 
         // key elements & aggregation elements should be differents
         {
-            vector<string> diff;
+            vector<uint32_t> diff;
             sort(keys_fields.begin(), keys_fields.end());
             sort(sum_fields.begin(), sum_fields.end());
             set_intersection(
@@ -412,8 +440,8 @@ void dry_run (
         }
 
         {
-            const auto bad_keys = count_if(keys_fields.begin(), keys_fields.end(), [&strs](const string& e){ return stoi(e) >= strs.size(); });
-            const auto bad_sum = count_if(sum_fields.begin(), sum_fields.end(), [&strs](const string& e){ return stoi(e) >= strs.size(); });
+            const auto bad_keys = count_if(keys_fields.begin(), keys_fields.end(), [&strs](const uint32_t& e){ return e >= strs.size(); });
+            const auto bad_sum = count_if(sum_fields.begin(), sum_fields.end(), [&strs](const uint32_t& e){ return e >= strs.size(); });
             const auto bad_prj = count_if(proj_fields.begin(), proj_fields.end(), [&strs](const string& e){
                 if (e.find("%") == string::npos)
                     return stoi(e) >= strs.size();

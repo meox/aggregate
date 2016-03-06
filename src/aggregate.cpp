@@ -258,7 +258,7 @@ int main(int argc, char* argv[])
                     j++;
                 }
 
-                string key = build_key(keys_fields, v);
+                const string key = build_key(keys_fields, v);
                 auto it = map_object.find(key);
                 if(it != map_object.end())
                 {
@@ -268,7 +268,6 @@ int main(int argc, char* argv[])
                         partial.begin(), it->second.sum_val.begin(),
                         [](const pval_t& a, const pval_t& b)
                         {
-                            constexpr int64_t zero{};
                             if (a.second == true && b.second == true)
                                 return make_pair(a.first + b.first, true);
                             else if (a.second == true && b.second == false)
@@ -276,7 +275,7 @@ int main(int argc, char* argv[])
                             else if (a.second == false && b.second == true)
                                 return make_pair(b.first, true);
                             else
-                                return make_pair(zero, false);
+                                return make_pair(0l, false);
                         }
                     );
                 }
@@ -322,14 +321,19 @@ int main(int argc, char* argv[])
     };
 
 
-    auto print_line = [&proj_fields, &registers, &print, &get](const mapval_t<int64_t>& o) {
+    std::vector<uint32_t> proj_fields_n;
+    std::transform(proj_fields.begin(), proj_fields.end(), std::back_inserter(proj_fields_n), [](const auto& e){ return std::stoi(e); });
+
+    auto print_line = [&proj_fields, &proj_fields_n, &registers, &print, &get](const mapval_t<int64_t>& o) {
         bool f{true};
+        size_t j{};
         for (const auto& i : proj_fields)
         {
             if (i.find("%") == 0)
                 print(registers[i], f);
             else
-                get(std::stoi(i), o, [&](const auto& v){ print(v, f); });
+                get(proj_fields_n[j], o, [&](const auto& v){ print(v, f); });
+            j++;
         }
     };
 

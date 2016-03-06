@@ -339,23 +339,21 @@ int main(int argc, char* argv[])
     std::vector<uint32_t> proj_fields_n;
     std::transform(proj_fields.begin(), proj_fields.end(), std::back_inserter(proj_fields_n), [](const auto& e){ return std::stoi(e); });
 
-    auto print_line = [&proj_fields, &proj_fields_n, &registers, &print, &get](const mapval_t<int64_t>& o) {
-        bool f{true};
-        size_t j{};
-        for (const auto& i : proj_fields)
-        {
-            if (i.find("%") == 0)
-                print(registers[i], f);
-            else
-                get(proj_fields_n[j], o, [&](const auto& v){ print(v, f); });
-            j++;
-        }
-    };
 
     //show aggregate
     for (const auto& o : map_object)
     {
-        print_line(o.second);
+        size_t j{};
+        bool f{true};
+        for (const auto& e : proj_fields)
+        {
+            if (e[0] == '%')
+                print(registers[e], f);
+            else
+                get(proj_fields_n[j], o.second, [&](const auto& v){ print(v, f); });
+            j++;
+        }
+
         fout << "\n";
     }
 

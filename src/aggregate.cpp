@@ -4,9 +4,12 @@
 #include <unordered_map>
 #include <queue>
 #include <fstream>
-#include <sstream>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
+
+extern "C" {
+    #include <xxhash.h>
+}
 
 
 /*
@@ -110,15 +113,34 @@ vector<string> get_index_string(const string& index)
     return indexs;
 }
 
-
-string build_key(const vector<uint32_t>& key_index, const vector<string>& line)
+class BuildKey
 {
-    const auto line_size = line.size();
-    stringstream s{};
+public:
+    BuildKey(const vector<uint32_t>& key_index) : _key_index(key_index)
+    {
+        state = XXH64_createState();
+    }
 
-    for(const auto& k : key_index) { s << line[k] << "#"; }
-    return s.str();
-}
+    uint64_t hash(const vector<string>& line)
+    {
+        XXH64_reset(state, 0);
+        for (const auto k : _key_index)
+        {
+            //cout << (state != nullptr) << " " << k << " " << line[k] << " " << line[k].size() << std::endl;
+            XXH64_update(state, (void*)line[k].c_str(), line[k].size());
+        }
+        return XXH64_digest(state);
+    }
+
+    ~BuildKey()
+    {
+        XXH64_freeState(state);
+    }
+
+private:
+    XXH64_state_t* state;
+    const vector<uint32_t>& _key_index;
+};
 
 
 void help();
@@ -135,13 +157,15 @@ void dry_run(
 
 int main(int argc, char* argv[])
 {
-    unordered_map<string, mapval_t<int64_t>> map_object;
+    unordered_map<uint64_t, mapval_t<int64_t>> map_object;
 
     vector<uint32_t> sum_fields;
     vector<uint32_t> keys_fields;
     vector<string> proj_fields;
 
     map<string, string> registers;
+
+    BuildKey key_builder{keys_fields};
 
     bool dry_run_exec{false}, multi_thread{false};
     size_t skip_line{0};
@@ -230,52 +254,52 @@ int main(int argc, char* argv[])
     
     for (const auto& fname : fnames)
     {
-        splitter(fname, input_sep, [&map_object, &sum_fields, &proj_fields, &keys_fields, &no_value, &non_valid, &partial](const vector<string>& v)
+        splitter(fname, input_sep, [&map_object, &sum_fields, &proj_fields, &keys_fields, &no_value, &non_valid, &partial, &key_builder](const vector<string>& v)
+        {
+            map<uint32_t, string> partial_prj;
+
+            size_t j{};
+            for(const auto& index : sum_fields)
             {
-                map<uint32_t, string> partial_prj;
-
-                size_t j{};
-                for(const auto& index : sum_fields)
-                {
-                    int64_t n = std::stol(v[index]);
-                    if(n != no_value)
-                        partial[j] = make_pair(n, true);
-                    else
-                        partial[j] = non_valid;
-                    j++;
-                }
-                
-                for(const auto& index : keys_fields)
-                    partial_prj[index] = v[index];
-
-
-                const string key = build_key(keys_fields, v);
-                auto it = map_object.find(key);
-                if(it != map_object.end())
-                {
-                    //exists
-                    transform(
-                        it->second.sum_val.begin(), it->second.sum_val.end(),
-                        partial.begin(), it->second.sum_val.begin(),
-                        [](const pval_t& a, const pval_t& b)
-                        {
-                            if (a.second == true && b.second == true)
-                                return make_pair(a.first + b.first, true);
-                            else if (a.second == true && b.second == false)
-                                return make_pair(a.first, true);
-                            else if (a.second == false && b.second == true)
-                                return make_pair(b.first, true);
-                            else
-                                return make_pair(0l, false);
-                        }
-                    );
-                }
+                int64_t n = std::stol(v[index]);
+                if(n != no_value)
+                    partial[j] = make_pair(n, true);
                 else
-                {
-                    map_object[key].sum_val = partial;
-                    map_object[key].prj_val = partial_prj;
-                }
-            }, skip_line);
+                    partial[j] = non_valid;
+                j++;
+            }
+            
+            for(const auto& index : keys_fields)
+                partial_prj[index] = v[index];
+
+
+            const uint64_t key = key_builder.hash(v);
+            auto it = map_object.find(key);
+            if(it != map_object.end())
+            {
+                //exists
+                transform(
+                    it->second.sum_val.begin(), it->second.sum_val.end(),
+                    partial.begin(), it->second.sum_val.begin(),
+                    [](const pval_t& a, const pval_t& b)
+                    {
+                        if (a.second == true && b.second == true)
+                            return make_pair(a.first + b.first, true);
+                        else if (a.second == true && b.second == false)
+                            return make_pair(a.first, true);
+                        else if (a.second == false && b.second == true)
+                            return make_pair(b.first, true);
+                        else
+                            return make_pair(0l, false);
+                    }
+                );
+            }
+            else
+            {
+                map_object[key].sum_val = partial;
+                map_object[key].prj_val = partial_prj;
+            }
+        }, skip_line);
     }
 
 
@@ -377,12 +401,12 @@ void dry_run (
             return;
         }
 
-        string key = build_key(keys_fields, strs);
+        //string key = build_key(keys_fields, strs);
         cout << "#fields:\t" << strs.size() << endl;
         cout << "keys size:\t" << keys_fields.size() << endl;
         cout << "aggr size:\t" << sum_fields.size() << endl;
         cout << "prj size:\t" << proj_fields.size() << endl;
-        cout << "Key:\t" << key << endl;
+        //cout << "Key:\t" << key << endl;
         cout << "Output Header:\t" << output_header << endl;
 
         // list of element not use in projection

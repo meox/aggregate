@@ -2,14 +2,11 @@
 #include <vector>
 #include <map>
 #include <unordered_map>
-#include <queue>
 #include <fstream>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
+#include <xxhash.h>
 
-extern "C" {
-    #include <xxhash.h>
-}
 
 
 /*

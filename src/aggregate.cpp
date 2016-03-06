@@ -28,7 +28,7 @@ template <typename T>
 struct mapval_t
 {
     vector<pair<T, bool>> sum_val;
-    vector<string> prj_val;
+    map<uint32_t, string> prj_val;
 };
 
 
@@ -227,36 +227,27 @@ int main(int argc, char* argv[])
 
     //( value , is_valid )
     vector<pair<int64_t, bool>> partial(sum_fields.size());
-    vector<string> partial_prj(proj_fields.size());
-
+    
     for (const auto& fname : fnames)
     {
-        splitter(fname, input_sep, [&map_object, &sum_fields, &proj_fields, &keys_fields, &no_value, &non_valid, &partial, &partial_prj](const vector<string>& v)
+        splitter(fname, input_sep, [&map_object, &sum_fields, &proj_fields, &keys_fields, &no_value, &non_valid, &partial](const vector<string>& v)
             {
+                map<uint32_t, string> partial_prj;
+
                 size_t j{};
                 for(const auto& index : sum_fields)
                 {
                     int64_t n = std::stol(v[index]);
                     if(n != no_value)
-                    {
                         partial[j] = make_pair(n, true);
-                    }
                     else
-                    {
                         partial[j] = non_valid;
-                    }
                     j++;
                 }
+                
+                for(const auto& index : keys_fields)
+                    partial_prj[index] = v[index];
 
-                j = 0;
-                for(const auto& i : proj_fields)
-                {
-                    if (i.find("%") == string::npos)
-                        partial_prj[j] = v[stoi(i)];
-                    else
-                        partial_prj[j].clear();
-                    j++;
-                }
 
                 const string key = build_key(keys_fields, v);
                 auto it = map_object.find(key);
@@ -295,7 +286,7 @@ int main(int argc, char* argv[])
         fout << output_header << endl;
 
 
-    auto get = [&sum_fields, &proj_fields, &no_value](uint32_t k, const mapval_t<int64_t>& o, auto printer) {
+    auto get = [&sum_fields, &keys_fields, &no_value](uint32_t k, const mapval_t<int64_t>& o, auto printer) {
         const auto it = find(sum_fields.begin(), sum_fields.end(), k);
         if (it != sum_fields.end())
         {
@@ -308,8 +299,8 @@ int main(int argc, char* argv[])
         }
         else
         {
-            const auto pos = find(proj_fields.begin(), proj_fields.end(), to_string(k));
-            printer(o.prj_val[pos - proj_fields.begin()]);
+            const auto kt = find(keys_fields.begin(), keys_fields.end(), k);
+            printer(o.prj_val.at(*kt));
         }
     };
 

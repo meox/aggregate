@@ -287,7 +287,7 @@ int main(int argc, char* argv[])
                         else if (a.second == false && b.second == true)
                             return make_pair(b.first, true);
                         else
-                            return make_pair(0l, false);
+                            return make_pair(static_cast<int64_t>(0), false);
                     }
                 );
             }

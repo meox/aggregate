@@ -25,7 +25,6 @@
 using namespace boost::filesystem;
 using namespace std;
 
-#define BUFFER_SIZE 512ul
 
 typedef pair<int64_t, bool> pval_t;
 

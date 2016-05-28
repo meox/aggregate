@@ -5,9 +5,13 @@
 #include <fstream>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/utility/string_ref.hpp> 
+
 #include <xxhash.h>
 
-
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
 
 /*
  *  Aggregator  (written by Gian Lorenzo Meocci <glmeocci@gmail.com>)
@@ -15,12 +19,13 @@
  */
 
 
-#define VERSION "1.3.0"
+#define VERSION "1.3.1"
 
 
 using namespace boost::filesystem;
 using namespace std;
 
+#define BUFFER_SIZE 512ul
 
 typedef pair<int64_t, bool> pval_t;
 
@@ -34,108 +39,83 @@ struct mapval_t
 class Reader
 {
 public:
-	Reader(const std::string& fname) : m_fname{fname}
+	Reader(const std::string& fname)
 	{
-		f.open(fname);
-		const auto begin = f.tellg();
-		f.seekg (0, ios::end);
-		const auto end = f.tellg();
-		f.seekg (0, ios::beg);
-		fsize = end - begin;
+		struct stat sb;
+		int fd = open(fname.c_str(), O_RDONLY);
+		fstat(fd, &sb);
+		fsize = sb.st_size;
+		off_t offset{0};
+		addr = static_cast<char*>(mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0));
 	}
 
-	std::string get_line()
+	boost::string_ref get_line()
 	{
-		if (buffer_data_size == 0)
-		{
-			if (!read_block())
-				return "";
-		}
+		if (addr == nullptr || end_reached)
+			return "";
 		
-
-		std::string r{};
-		while (true)
+		const auto end_line_pos = get_end_line();
+		if (end_line_pos != std::string::npos)
 		{
-			const auto end_line_pos = get_end_line();
-			if (end_line_pos != std::string::npos)
-			{
-				r += std::string(buffer, p_buffer, end_line_pos);
-				p_buffer += end_line_pos;
-				return r;
-			}
-			else
-			{
-				r += std::string(buffer, p_buffer, buffer_data_size - p_buffer);
-				if (!read_block())
-					return r;
-			}
+			const auto diff = end_line_pos - p_buffer;
+			boost::string_ref r = boost::string_ref(&addr[p_buffer], diff);
+			p_buffer += diff+1;
+			return r;
+		}
+		else
+		{
+			return boost::string_ref(&addr[p_buffer], fsize - p_buffer);
 		}
 	}
 
 	bool is_finished() const { return end_reached; }
-
-private:
-	bool read_block(size_t s = 0)
+	
+	~Reader()
 	{
-		size_t to_read;
-		if (s == 0)
-			to_read = std::min(fsize - bytes_read, BUFFER_SIZE);
-		else
-			to_read = s;
-
-		if (to_read == 0)
-		{
-			end_reached = true;
-			return false;
-		}
-
-		f.read(buffer, to_read);
-		bytes_read += to_read;
-		buffer_data_size = to_read;
-		return true;
+		munmap(addr, fsize);
 	}
 
-	size_t get_end_line()
+private:
+	inline size_t get_end_line()
 	{
-		for (size_t i = p_buffer; i < buffer_data_size; i++)
-			if (buffer[i] == end_line)
+		for (size_t i = p_buffer; i < fsize; i++)
+			if (addr[i] == end_line)
 				return i;
 
+		end_reached = true;
 		return std::string::npos;
 	}
 
-	const static size_t BUFFER_SIZE{4096};
-	ifstream f;
+	char* addr{nullptr};
 	size_t fsize;
-	size_t bytes_read{0};
 	size_t p_buffer{0};
-	size_t buffer_data_size{0};
 
-	std::string m_fname;
 	bool end_reached{false};
-	char buffer[BUFFER_SIZE];
-	const char end_line{'\n'};
+	constexpr const static char end_line{'\n'};
 };
 
 
 template <typename F>
 void splitter(const string& fname, const string& separator, F fun, size_t skip_line)
 {
-	ifstream f{fname};
-	string line;
+	//ifstream f{fname};
+	Reader reader{fname};
+
 	const auto sep = boost::is_any_of(separator);
 	size_t skipped{0};
 
-	while(f && skipped < skip_line)
+	while(!reader.is_finished() && skipped < skip_line)
 	{
-		getline(f, line);
+		reader.get_line();
 		skipped++;
 	}
 
-	while(f)
+	while (!reader.is_finished())
 	{
-		getline(f, line);
-		
+		//getline(f, line);
+		const boost::string_ref line = reader.get_line();
+		//std::cerr << "line: " << line << "***" << std::endl;
+
 		if (!line.empty())
 		{
 			vector<string> strs;
@@ -582,7 +562,7 @@ void help()
 	cout << " --version        print the version number and exit" << endl;
 
 	cout << endl;
-	cout << "ex: ./aggregate -r %t:1982 -k \"2-20\" -s \"21-35\" -p \"%t;1-35\" --skip-line 1 --path /ssd/BI_SUB_UP_ACT_RAW --reuse-skipped --output-file out.csv" << endl;
+	cout << "ex: ./aggregate -r %t:1982 -k \"2-20\" -s \"21-35\" -p \"%t;1-35\" --skip-line 1 --path /mnt/disk-master/BI_SUB_IUCS_STATS_RAW/ --output-file out.csv" << endl;
 	cout << endl;
 }
 

@@ -25,7 +25,6 @@
 using namespace boost::filesystem;
 using namespace std;
 
-
 typedef pair<int64_t, bool> pval_t;
 
 template <typename T>
@@ -34,6 +33,7 @@ struct mapval_t
 	vector<pair<T, bool>> sum_val;
 	map<uint32_t, string> prj_val;
 };
+
 
 class Reader
 {
@@ -44,7 +44,6 @@ public:
 		int fd = open(fname.c_str(), O_RDONLY);
 		fstat(fd, &sb);
 		fsize = sb.st_size;
-		off_t offset{0};
 		addr = static_cast<char*>(mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0));
 	}
 

@@ -1,4 +1,6 @@
 #include <iostream>
+#include <thread>
+#include <mutex>
 #include <vector>
 #include <map>
 #include <unordered_map>
@@ -180,6 +182,8 @@ public:
 
 	uint64_t hash(const vector<string>& line)
 	{
+		std::lock_guard<std::mutex> l(m);
+
 		XXH64_reset(state, 0);
 		for (const auto k : _key_index)
 		{
@@ -197,6 +201,7 @@ public:
 private:
 	XXH64_state_t* state;
 	const vector<uint32_t>& _key_index;
+	std::mutex m;
 };
 
 
@@ -214,8 +219,6 @@ void dry_run(
 
 int main(int argc, char* argv[])
 {
-	unordered_map<uint64_t, mapval_t<int64_t>> map_object;
-
 	vector<uint32_t> sum_fields;
 	vector<uint32_t> keys_fields;
 	vector<string> proj_fields;
@@ -305,59 +308,69 @@ int main(int argc, char* argv[])
 	}
 
 	const auto non_valid = make_pair(0, false);
-
-	//( value , is_valid )
-	vector<pair<int64_t, bool>> partial(sum_fields.size());
+	std::vector<unordered_map<uint64_t, mapval_t<int64_t>>> map_objects(fnames.size());
 	
+	std::vector<std::thread> th_v;
+	size_t th_index{0};
 	for (const auto& fname : fnames)
 	{
-		splitter(fname, input_sep, [&map_object, &sum_fields, &proj_fields, &keys_fields, &no_value, &non_valid, &partial, &key_builder](const vector<string>& v)
-		{
-			map<uint32_t, string> partial_prj;
+		th_v.push_back(std::thread([fname, input_sep, skip_line, map_objects, &sum_fields, &keys_fields, &no_value, &non_valid, &key_builder](size_t th_index) mutable {
+			auto& map_object = map_objects[th_index];
 
-			size_t j{};
-			for(const auto& index : sum_fields)
+			splitter(fname, input_sep, [&map_object, &sum_fields, &keys_fields, &no_value, &non_valid, &key_builder](const vector<string>& v)
 			{
-				int64_t n = std::stol(v[index]);
-				if(n != no_value)
-					partial[j] = make_pair(n, true);
+				//( value , is_valid )
+				vector<pair<int64_t, bool>> partial(sum_fields.size());
+				map<uint32_t, string> partial_prj;
+
+				size_t j{};
+				for(const auto& index : sum_fields)
+				{
+					int64_t n = std::stol(v[index]);
+					if(n != no_value)
+						partial[j] = make_pair(n, true);
+					else
+						partial[j] = non_valid;
+					j++;
+				}
+				
+				for(const auto& index : keys_fields)
+					partial_prj[index] = v[index];
+
+				const uint64_t key = key_builder.hash(v);
+				auto it = map_object.find(key);
+				if(it != map_object.end())
+				{
+					//exists
+					transform(
+						it->second.sum_val.begin(), it->second.sum_val.end(),
+						partial.begin(), it->second.sum_val.begin(),
+						[](const pval_t& a, const pval_t& b)
+						{
+							if (a.second == true && b.second == true)
+								return make_pair(a.first + b.first, true);
+							else if (a.second == true && b.second == false)
+								return make_pair(a.first, true);
+							else if (a.second == false && b.second == true)
+								return make_pair(b.first, true);
+							else
+								return make_pair(static_cast<int64_t>(0), false);
+						}
+					);
+				}
 				else
-					partial[j] = non_valid;
-				j++;
-			}
-			
-			for(const auto& index : keys_fields)
-				partial_prj[index] = v[index];
-
-
-			const uint64_t key = key_builder.hash(v);
-			auto it = map_object.find(key);
-			if(it != map_object.end())
-			{
-				//exists
-				transform(
-					it->second.sum_val.begin(), it->second.sum_val.end(),
-					partial.begin(), it->second.sum_val.begin(),
-					[](const pval_t& a, const pval_t& b)
-					{
-						if (a.second == true && b.second == true)
-							return make_pair(a.first + b.first, true);
-						else if (a.second == true && b.second == false)
-							return make_pair(a.first, true);
-						else if (a.second == false && b.second == true)
-							return make_pair(b.first, true);
-						else
-							return make_pair(static_cast<int64_t>(0), false);
-					}
-				);
-			}
-			else
-			{
-				map_object[key].sum_val = partial;
-				map_object[key].prj_val = partial_prj;
-			}
-		}, skip_line);
+				{
+					map_object[key].sum_val = partial;
+					map_object[key].prj_val = partial_prj;
+				}
+			}, skip_line);
+		}, th_index++));
 	}
+
+	for (auto& th : th_v)
+		th.join();
+
+	unordered_map<uint64_t, mapval_t<int64_t>> map_object;
 
 
 	// save

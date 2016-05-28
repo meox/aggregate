@@ -98,7 +98,6 @@ private:
 template <typename F>
 void splitter(const string& fname, const string& separator, F fun, size_t skip_line)
 {
-	//ifstream f{fname};
 	Reader reader{fname};
 
 	const auto sep = boost::is_any_of(separator);
@@ -112,10 +111,7 @@ void splitter(const string& fname, const string& separator, F fun, size_t skip_l
 
 	while (!reader.is_finished())
 	{
-		//getline(f, line);
 		const boost::string_ref line = reader.get_line();
-		//std::cerr << "line: " << line << "***" << std::endl;
-
 		if (!line.empty())
 		{
 			vector<string> strs;

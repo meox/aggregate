@@ -1,6 +1,5 @@
 #include <iostream>
 #include <thread>
-#include <mutex>
 #include <vector>
 #include <map>
 #include <unordered_map>
@@ -21,7 +20,7 @@
  */
 
 
-#define VERSION "1.3.1"
+#define VERSION "1.4"
 
 
 using namespace boost::filesystem;
@@ -103,7 +102,7 @@ void splitter(const string& fname, const string& separator, F fun, size_t skip_l
 	const auto sep = boost::is_any_of(separator);
 	size_t skipped{0};
 
-	while(!reader.is_finished() && skipped < skip_line)
+	while (!reader.is_finished() && skipped < skip_line)
 	{
 		reader.get_line();
 		skipped++;
@@ -182,8 +181,6 @@ public:
 
 	uint64_t hash(const vector<string>& line)
 	{
-		std::lock_guard<std::mutex> l(m);
-
 		XXH64_reset(state, 0);
 		for (const auto k : _key_index)
 		{
@@ -201,7 +198,6 @@ public:
 private:
 	XXH64_state_t* state;
 	const vector<uint32_t>& _key_index;
-	std::mutex m;
 };
 
 
@@ -224,8 +220,6 @@ int main(int argc, char* argv[])
 	vector<string> proj_fields;
 
 	map<string, string> registers;
-
-	BuildKey key_builder{keys_fields};
 
 	bool dry_run_exec{false}, multi_thread{false};
 	size_t skip_line{0};
@@ -308,70 +302,60 @@ int main(int argc, char* argv[])
 	}
 
 	const auto non_valid = make_pair(0, false);
-	std::vector<unordered_map<uint64_t, mapval_t<int64_t>>> map_objects(fnames.size());
 	
-	std::vector<std::thread> th_v;
-	size_t th_index{0};
+	BuildKey key_builder{keys_fields};
+	std::unordered_map<uint64_t, mapval_t<int64_t>> map_object;
+
 	for (const auto& fname : fnames)
 	{
-		th_v.push_back(std::thread([fname, input_sep, skip_line, map_objects, &sum_fields, &keys_fields, &no_value, &non_valid, &key_builder](size_t th_index) mutable {
-			auto& map_object = map_objects[th_index];
+		splitter(fname, input_sep, [&map_object, &sum_fields, &keys_fields, &no_value, &non_valid, &key_builder](const vector<string>& v)
+		{
+			//( value , is_valid )
+			vector<pair<int64_t, bool>> partial(sum_fields.size());
+			map<uint32_t, string> partial_prj;
 
-			splitter(fname, input_sep, [&map_object, &sum_fields, &keys_fields, &no_value, &non_valid, &key_builder](const vector<string>& v)
+			size_t j{};
+			for(const auto& index : sum_fields)
 			{
-				//( value , is_valid )
-				vector<pair<int64_t, bool>> partial(sum_fields.size());
-				map<uint32_t, string> partial_prj;
-
-				size_t j{};
-				for(const auto& index : sum_fields)
-				{
-					int64_t n = std::stol(v[index]);
-					if(n != no_value)
-						partial[j] = make_pair(n, true);
-					else
-						partial[j] = non_valid;
-					j++;
-				}
-				
-				for(const auto& index : keys_fields)
-					partial_prj[index] = v[index];
-
-				const uint64_t key = key_builder.hash(v);
-				auto it = map_object.find(key);
-				if(it != map_object.end())
-				{
-					//exists
-					transform(
-						it->second.sum_val.begin(), it->second.sum_val.end(),
-						partial.begin(), it->second.sum_val.begin(),
-						[](const pval_t& a, const pval_t& b)
-						{
-							if (a.second == true && b.second == true)
-								return make_pair(a.first + b.first, true);
-							else if (a.second == true && b.second == false)
-								return make_pair(a.first, true);
-							else if (a.second == false && b.second == true)
-								return make_pair(b.first, true);
-							else
-								return make_pair(static_cast<int64_t>(0), false);
-						}
-					);
-				}
+				int64_t n = std::stol(v[index]);
+				if(n != no_value)
+					partial[j] = make_pair(n, true);
 				else
-				{
-					map_object[key].sum_val = partial;
-					map_object[key].prj_val = partial_prj;
-				}
-			}, skip_line);
-		}, th_index++));
+					partial[j] = non_valid;
+				j++;
+			}
+			
+			for(const auto& index : keys_fields)
+				partial_prj[index] = v[index];
+
+			const uint64_t key = key_builder.hash(v);
+			auto it = map_object.find(key);
+			if(it != map_object.end())
+			{
+				//exists
+				transform(
+					it->second.sum_val.begin(), it->second.sum_val.end(),
+					partial.begin(), it->second.sum_val.begin(),
+					[](const pval_t& a, const pval_t& b)
+					{
+						if (a.second == true && b.second == true)
+							return make_pair(a.first + b.first, true);
+						else if (a.second == true && b.second == false)
+							return make_pair(a.first, true);
+						else if (a.second == false && b.second == true)
+							return make_pair(b.first, true);
+						else
+							return make_pair(static_cast<int64_t>(0), false);
+					}
+				);
+			}
+			else
+			{
+				map_object[key].sum_val = partial;
+				map_object[key].prj_val = partial_prj;
+			}
+		}, skip_line);
 	}
-
-	for (auto& th : th_v)
-		th.join();
-
-	unordered_map<uint64_t, mapval_t<int64_t>> map_object;
-
 
 	// save
 	ofstream fout{output_file};

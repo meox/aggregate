@@ -1,18 +1,13 @@
 #include <iostream>
 
 #include <thread>
-#include <atomic>
-#include <mutex>
 #include <vector>
-#include <queue>
 #include <map>
 #include <unordered_map>
 #include <fstream>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/utility/string_ref.hpp> 
-#include <boost/lockfree/stack.hpp>
-
 #include <xxhash.h>
 
 #include <fcntl.h>

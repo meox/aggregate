@@ -33,8 +33,8 @@ typedef pair<int64_t, bool> pval_t;
 template <typename T>
 struct mapval_t
 {
-	vector<pair<T, bool>> sum_val;
-	map<uint32_t, std::string> prj_val;
+	std::vector<std::pair<T, bool>> sum_val;
+	std::map<uint32_t, std::string> prj_val;
 };
 
 
@@ -149,12 +149,13 @@ void splitter(const string& fname, const string& separator, F fun, size_t skip_l
 }
 
 
-vector<uint32_t> get_index_uint32(const string& index)
+std::map<uint32_t, uint32_t> get_index_uint32(const string& index)
 {
-	vector<uint32_t> indexs;
+	std::map<uint32_t, uint32_t> indexs;
 	const auto sep = boost::is_any_of(";");
 
-	vector<string> k_strs;
+	size_t pos{};
+	std::vector<std::string> k_strs;
 	boost::split(k_strs, index, sep);
 
 	for(const auto& k : k_strs)
@@ -164,18 +165,20 @@ vector<uint32_t> get_index_uint32(const string& index)
 		{
 			const auto b = stoull(k.substr(0, p));
 			const auto e = stoull(k.substr(p+1));
-			for(size_t n = b; n <= e; n++)
-				indexs.push_back(n);
+			for (size_t n = b; n <= e; n++)
+				indexs[n] = pos++;
 		}
 		else
-			indexs.push_back(std::stoi(k));
+		{
+			indexs[std::stoul(k)] = pos++;
+		}
 	}
 
 	return indexs;
 }
 
 
-vector<string> get_index_string(const string& index)
+std::vector<std::string> get_index_string(const std::string& index)
 {
 	vector<string> indexs;
 	const auto sep = boost::is_any_of(";");
@@ -200,10 +203,11 @@ vector<string> get_index_string(const string& index)
 	return indexs;
 }
 
+
 class BuildKey
 {
 public:
-	BuildKey(const vector<uint32_t>& key_index) : _key_index(key_index)
+	BuildKey(const std::map<uint32_t, uint32_t>& key_index) : _key_index(key_index)
 	{
 		state = XXH64_createState();
 	}
@@ -214,7 +218,7 @@ public:
 		for (const auto k : _key_index)
 		{
 			//cout << (state != nullptr) << " " << k << " " << line[k] << " " << line[k].size() << std::endl;
-			XXH64_update(state, line[k].data(), line[k].size());
+			XXH64_update(state, line[k.second].data(), line[k.second].size());
 		}
 		return XXH64_digest(state);
 	}
@@ -226,15 +230,15 @@ public:
 
 private:
 	XXH64_state_t* state;
-	const vector<uint32_t>& _key_index;
+	const std::map<uint32_t, uint32_t>& _key_index;
 };
 
 
 int64_t fast_atol(const std_exp::string_view& str)
 {
-	int64_t val = 0;
-	size_t i = 0;
-	const size_t l = str.length();
+	int64_t val{};
+	size_t i{};
+	const size_t l{str.length()};
 	bool negative{false};
 
 	if (l == 0) return 0;
@@ -253,9 +257,9 @@ int64_t fast_atol(const std_exp::string_view& str)
 void help();
 void dry_run(
 	const vector<string>& fnames,
-	vector<uint32_t>& keys_fields,
-	vector<uint32_t>& sum_fields,
-	vector<string>& proj_fields,
+	std::map<uint32_t, uint32_t>& keys_fields,
+	std::map<uint32_t, uint32_t>& sum_fields,
+	std::vector<std::string>& proj_fields,
 	const map<string, string>& registers,
 	const string& output_header,
 	const string& input_sep);
@@ -264,21 +268,21 @@ void dry_run(
 
 int main(int argc, char* argv[])
 {
-	vector<uint32_t> sum_fields;
-	vector<uint32_t> keys_fields;
+	std::map<uint32_t, uint32_t> sum_fields;
+	std::map<uint32_t, uint32_t> keys_fields;
 	vector<string> proj_fields;
 
-	map<string, string> registers;
+	std::map<std::string, std::string> registers;
 
 	bool dry_run_exec{false};
 	size_t skip_line{0};
-	string output_header{};
+	std::string output_header{};
 
-	vector<string> header_lines{};
-	vector<string> fnames{};
+	std::vector<std::string> header_lines{};
+	std::vector<std::string> fnames{};
 	int64_t no_value{-1};
-	string input_sep{","}, output_sep{","};
-	string output_file{"out.csv"};
+	std::string input_sep{","}, output_sep{","};
+	std::string output_file{"out.csv"};
 
 	int i{};
 	while(i < argc)
@@ -338,10 +342,10 @@ int main(int argc, char* argv[])
 	}
 
 
-	if (proj_fields.empty()) { cerr << "Projection fields list is empty!" << endl; exit(1); }
-	if (sum_fields.empty())  { cerr << "Aggregation fields list is empty!" << endl; exit(1); }
-	if (keys_fields.empty()) { cerr << "Key fields list is empty!" << endl; exit(1); }
-	if (fnames.empty())      { cerr << "No files selected" << endl; exit(1); }
+	if (proj_fields.empty()) { std::cerr << "Projection fields list is empty!" << std::endl; exit(1); }
+	if (sum_fields.empty())  { std::cerr << "Aggregation fields list is empty!" << std::endl; exit(1); }
+	if (keys_fields.empty()) { std::cerr << "Key fields list is empty!" << std::endl; exit(1); }
+	if (fnames.empty())      { std::cerr << "No files selected" << std::endl; exit(1); }
 
 
 	if (dry_run_exec)
@@ -350,22 +354,23 @@ int main(int argc, char* argv[])
 		return 0;
 	}
 
-	const auto non_valid = make_pair(0, false);
+	const auto non_valid = std::make_pair(0, false);
 	
 	BuildKey key_builder{keys_fields};
 	std::unordered_map<uint64_t, mapval_t<int64_t>> map_object;
 
 	//( value , is_valid )
-	vector<pair<int64_t, bool>> partial(sum_fields.size());
-	
+	std::vector<std::pair<int64_t, bool>> partial(sum_fields.size());
+
 	for (const auto& fname : fnames)
 	{
 		splitter(fname, input_sep, [&map_object, &partial, &sum_fields, &keys_fields, &no_value, &non_valid, &key_builder](const std::vector<std_exp::string_view>& v)
 		{
 			size_t j{};
-			for(const auto& index : sum_fields)
+			for (const auto& index : sum_fields)
 			{
-				int64_t n = fast_atol(v[index]);
+				int64_t n = fast_atol(v[index.first]);
+				//std::cerr << "f: " << index.first << ", s: " << index.second << ", n: " << n << std::endl;
 				if(n != no_value)
 					partial[j] = make_pair(n, true);
 				else
@@ -397,8 +402,8 @@ int main(int argc, char* argv[])
 			else
 			{
 				auto& obj = map_object[key];
-				for(const auto& index : keys_fields)
-					obj.prj_val[index] = v[index].to_string();
+				for (const auto& index : keys_fields)
+					obj.prj_val[index.first] = v[index.first].to_string();
 
 				obj.sum_val = partial;
 			}
@@ -406,18 +411,19 @@ int main(int argc, char* argv[])
 	}
 
 	// save
-	ofstream fout{output_file};
+	std::ofstream fout{output_file};
 
 	if (!output_header.empty())
 		fout << output_header << endl;
 
 
 	auto get = [&sum_fields, &keys_fields, &no_value](uint32_t k, const mapval_t<int64_t>& mval, auto printer) {
-		const auto it = find(sum_fields.begin(), sum_fields.end(), k);
+		const auto it = sum_fields.find(k);
 		if (it != sum_fields.end())
 		{
 			// is a sum fields
-			const auto val = mval.sum_val[it - sum_fields.begin()];
+			const auto val = mval.sum_val.at(it->second);
+			//std::cerr << "S: " << k << ", v: " << val.second << "/" << val.first << std::endl;
 			if (val.second)
 				printer(val.first);
 			else
@@ -425,8 +431,8 @@ int main(int argc, char* argv[])
 		}
 		else
 		{
-			const auto kt = find(keys_fields.begin(), keys_fields.end(), k);
-			printer(mval.prj_val.at(*kt));
+			//std::cerr << "P: " << k << ", v: " << kt->second << std::endl;
+			printer(mval.prj_val.at(k));
 		}
 	};
 
@@ -440,7 +446,6 @@ int main(int argc, char* argv[])
 
 	std::vector<uint32_t> proj_fields_n;
 	std::transform(proj_fields.begin(), proj_fields.end(), std::back_inserter(proj_fields_n), [](const auto& e){ return std::stoi(e); });
-
 
 	//show aggregate
 	for (const auto& o : map_object)
@@ -469,109 +474,110 @@ int main(int argc, char* argv[])
  */
 
 void dry_run (
-	const vector<string>& fnames,
-	vector<uint32_t>& keys_fields,
-	vector<uint32_t>& sum_fields,
+	const std::vector<std::string>& fnames,
+	std::map<uint32_t, uint32_t>& keys_fields,
+	std::map<uint32_t, uint32_t>& sum_fields,
 	vector<string>& proj_fields,
 	const map<string,string>& registers,
 	const string& output_header,
 	const string& input_sep)
 {
 	// show files
-	for(const auto& f : fnames)
-	{
-		cout << "Reading file: " << f << endl;
-	}
-	cout << endl;
-
+	for (const auto& f : fnames)
+		std::cout << "Reading file: " << f << endl;
+	std::cout << endl;
 
 	//open first file
 	{
-		string line;
-		vector<string> strs;
+		std::string line;
+		std::vector<std::string> strs;
 
-		ifstream f{fnames[0]};
+		std::ifstream f{fnames[0]};
 		const auto sep = boost::is_any_of(input_sep);
-		getline(f, line);
+		std::getline(f, line);
 		boost::split(strs, line, sep);
 
 		if (strs.size() == 1)
 		{
-			cout << "Bad separator: size = " << strs.size() << endl;
+			std::cout << "Bad separator: size = " << strs.size() << endl;
 			return;
 		}
 
 		//string key = build_key(keys_fields, strs);
-		cout << "#fields:\t" << strs.size() << endl;
-		cout << "keys size:\t" << keys_fields.size() << endl;
-		cout << "aggr size:\t" << sum_fields.size() << endl;
-		cout << "prj size:\t" << proj_fields.size() << endl;
-		//cout << "Key:\t" << key << endl;
-		cout << "Output Header:\t" << output_header << endl;
+		std::cout << "#fields:\t" << strs.size() << endl;
+		std::cout << "keys size:\t" << keys_fields.size() << endl;
+		std::cout << "aggr size:\t" << sum_fields.size() << endl;
+		std::cout << "prj size:\t" << proj_fields.size() << endl;
+		//std::cout << "Key:\t" << key << endl;
+		std::cout << "Output Header:\t" << output_header << endl;
 
 		// list of element not use in projection
 		{
 			bool found{false};
-			cout << "#fields not use in projection: ";
+			std::cout << "#fields not use in projection: ";
 			for(size_t i = 0; i < strs.size(); i++)
 			{
 				if (find(proj_fields.begin(), proj_fields.end(), to_string(i)) == proj_fields.end())
 				{
 					found = true;
-					cout << i << " ";
+					std::cout << i << " ";
 				}
 			}
 			if (!found) cout << 0 << endl;
-			cout << endl;
+			std::cout << endl;
 		}
 
 		// check errors
 		if(keys_fields.size() > strs.size())
-			cout << "Keys field list is too big: (" << keys_fields.size() << ">" << strs.size() << ")" << endl;
+			std::cout << "Keys field list is too big: (" << keys_fields.size() << ">" << strs.size() << ")" << endl;
 
 		if(sum_fields.size() > strs.size())
-			cout << "Aggregation field list is too big: (" << sum_fields.size() << ">" << strs.size() << ")" << endl;
+			std::cout << "Aggregation field list is too big: (" << sum_fields.size() << ">" << strs.size() << ")" << endl;
 
 
 		for (const auto& k: proj_fields)
 		{
 			if (k.find("%") == 0 && registers.find(k) == registers.end())
-				cout << "Register " << k << " used but not initialized" << endl;
+				std::cout << "Register " << k << " used but not initialized" << endl;
 		}
 
 
 		// key elements & aggregation elements should be differents
 		{
-			vector<uint32_t> diff;
-			sort(keys_fields.begin(), keys_fields.end());
-			sort(sum_fields.begin(), sum_fields.end());
-			set_intersection(
-				keys_fields.begin(), keys_fields.end(),
-				sum_fields.begin(), sum_fields.end(), back_inserter(diff));
+			std::vector<uint32_t> s_fields;
+			std::vector<uint32_t> k_fields;
+			std::vector<uint32_t> diff;
+
+			std::for_each(sum_fields.begin(), sum_fields.end(), [&s_fields](const auto& e){ s_fields.push_back(e.first); });
+			std::for_each(keys_fields.begin(), keys_fields.end(), [&k_fields](const auto& e){ k_fields.push_back(e.first); });
+
+			std::set_intersection(
+				k_fields.begin(), k_fields.end(),
+				s_fields.begin(), s_fields.end(), back_inserter(diff));
 
 			if (!diff.empty())
 			{
-				cout << "Elements that are both present in keys and in aggregation: ";
+				std::cout << "Elements that are both present in keys and in aggregation: ";
 				for (const auto& e : diff)
-					cout << e << " ";
-				cout << endl;
+					std::cout << e << " ";
+				std::cout << endl;
 			}
 		}
 
 		{
-			const auto bad_keys = count_if(keys_fields.begin(), keys_fields.end(), [&strs](const uint32_t& e){ return e >= strs.size(); });
-			const auto bad_sum = count_if(sum_fields.begin(), sum_fields.end(), [&strs](const uint32_t& e){ return e >= strs.size(); });
-			const auto bad_prj = count_if(proj_fields.begin(), proj_fields.end(), [&strs](const string& e){
+			const auto bad_keys = std::count_if(keys_fields.begin(), keys_fields.end(), [&strs](const auto& e){ return e.first >= strs.size(); });
+			const auto bad_sum = std::count_if(sum_fields.begin(), sum_fields.end(), [&strs](const auto& e){ return e.first >= strs.size(); });
+			const auto bad_prj = std::count_if(proj_fields.begin(), proj_fields.end(), [&strs](const string& e){
 				if (e.find("%") == string::npos)
 					return stoull(e) >= strs.size();
 				return false;
 			});
 
-			if(bad_keys > 0)
+			if (bad_keys > 0)
 				cout << "There are " << bad_keys << " elements in Keys list that exceded the total number of fields";
-			if(bad_sum > 0)
+			if (bad_sum > 0)
 				cout << "There are " << bad_sum << " elements in Aggregation list that exceded the total number of fields";
-			if(bad_prj > 0)
+			if (bad_prj > 0)
 				cout << "There are " << bad_prj << " elements in Projection list that exceded the total number of fields";
 		}
 

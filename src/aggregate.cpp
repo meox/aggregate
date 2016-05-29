@@ -95,26 +95,31 @@ private:
 	constexpr const static char end_line{'\n'};
 };
 
-
-std::vector<std_exp::string_view> split(const std_exp::string_view& line, const char& sep)
+inline
+std::vector<std_exp::string_view> split(const std_exp::string_view& line, char sep)
 {
+	static size_t reservation = 0;
 	std::vector<std_exp::string_view> v;
-	v.reserve(30);
+	if (reservation != 0)
+		v.reserve(reservation);
 
-	size_t last = 0, i = 0;
-	for (; i < line.length(); i++)
+	const size_t l = line.length();
+	size_t last = 0, i = 0, c = 0;
+	for (; i < l; i++)
 	{
 		if (line[i] == sep)
 		{
 			v.push_back(std_exp::string_view(&line[last], (i - last)));
 			i++;
 			last = i;
+			c++;
 		}
 	}
 
 	if (last < i)
 		v.push_back(std_exp::string_view(&line[last], (i - last - 1)));
 
+	reservation = c + 1;
 	return v;
 }
 
@@ -169,6 +174,7 @@ vector<uint32_t> get_index_uint32(const string& index)
 	return indexs;
 }
 
+
 vector<string> get_index_string(const string& index)
 {
 	vector<string> indexs;
@@ -208,7 +214,7 @@ public:
 		for (const auto k : _key_index)
 		{
 			//cout << (state != nullptr) << " " << k << " " << line[k] << " " << line[k].size() << std::endl;
-			XXH64_update(state, (line[k].data()), line[k].size());
+			XXH64_update(state, line[k].data(), line[k].size());
 		}
 		return XXH64_digest(state);
 	}
@@ -231,28 +237,16 @@ int64_t fast_atol(const std_exp::string_view& str)
 	const size_t l = str.length();
 	bool negative{false};
 
-	if (l == 0)
-		return 0;
+	if (l == 0) return 0;
 
-	if (str[0] == '-')
-	{
-		i = 1;
-		negative = true;
-	}
-	else if (str[0] == '+')
-	{
-		i = 1;
-	}
+	if (str[0] == '-') { i = 1; negative = true; }
+	else if (str[0] == '+') { i = 1; }
 
 	for (; i < l; i++)
-	{
 		val = val*10 + (str[i] - '0');
-	}
 
-	if (negative)
-		return -val;
-	else
-		return val;
+	if (negative) return -val;
+	else return val;
 }
 
 
@@ -361,17 +355,16 @@ int main(int argc, char* argv[])
 	BuildKey key_builder{keys_fields};
 	std::unordered_map<uint64_t, mapval_t<int64_t>> map_object;
 
+	//( value , is_valid )
+	vector<pair<int64_t, bool>> partial(sum_fields.size());
+	
 	for (const auto& fname : fnames)
 	{
-		splitter(fname, input_sep, [&map_object, &sum_fields, &keys_fields, &no_value, &non_valid, &key_builder](const std::vector<std_exp::string_view>& v)
+		splitter(fname, input_sep, [&map_object, &partial, &sum_fields, &keys_fields, &no_value, &non_valid, &key_builder](const std::vector<std_exp::string_view>& v)
 		{
-			//( value , is_valid )
-			vector<pair<int64_t, bool>> partial(sum_fields.size());
-
 			size_t j{};
 			for(const auto& index : sum_fields)
 			{
-				//int64_t n = std::stol(v[index]);
 				int64_t n = fast_atol(v[index]);
 				if(n != no_value)
 					partial[j] = make_pair(n, true);
@@ -382,7 +375,7 @@ int main(int argc, char* argv[])
 			
 			const uint64_t key = key_builder.hash(v);
 			auto it = map_object.find(key);
-			if(it != map_object.end())
+			if (it != map_object.end())
 			{
 				//exists
 				transform(

@@ -20,7 +20,7 @@
  */
 
 
-#define VERSION "1.4"
+#define VERSION "1.4.0"
 
 
 using namespace boost::filesystem;

@@ -227,9 +227,32 @@ private:
 int64_t fast_atol(const std_exp::string_view& str)
 {
 	int64_t val = 0;
-	for (const auto& v : str)
-		val = val*10 + (v - '0');
-	return val;
+	size_t i = 0;
+	const size_t l = str.length();
+	bool negative{false};
+
+	if (l == 0)
+		return 0;
+
+	if (str[0] == '-')
+	{
+		i = 1;
+		negative = true;
+	}
+	else if (str[0] == '+')
+	{
+		i = 1;
+	}
+
+	for (; i < l; i++)
+	{
+		val = val*10 + (str[i] - '0');
+	}
+
+	if (negative)
+		return -val;
+	else
+		return val;
 }
 
 

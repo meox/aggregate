@@ -7,7 +7,7 @@
 #include <fstream>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
-#include <boost/utility/string_ref.hpp> 
+#include <experimental/string_view>
 #include <xxhash.h>
 
 #include <fcntl.h>
@@ -25,6 +25,8 @@
 
 using namespace boost::filesystem;
 using namespace std;
+namespace std_exp = std::experimental;
+
 
 typedef pair<int64_t, bool> pval_t;
 
@@ -32,7 +34,7 @@ template <typename T>
 struct mapval_t
 {
 	vector<pair<T, bool>> sum_val;
-	map<uint32_t, string> prj_val;
+	map<uint32_t, std::string> prj_val;
 };
 
 
@@ -48,7 +50,7 @@ public:
 		addr = static_cast<char*>(mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0));
 	}
 
-	boost::string_ref get_line()
+	std_exp::string_view get_line()
 	{
 		if (addr == nullptr || end_reached)
 			return "";
@@ -57,13 +59,13 @@ public:
 		if (end_line_pos != std::string::npos)
 		{
 			const auto diff = end_line_pos - p_buffer;
-			boost::string_ref r = boost::string_ref(&addr[p_buffer], diff);
+			std_exp::string_view r = std_exp::string_view(&addr[p_buffer], diff);
 			p_buffer += diff+1;
 			return r;
 		}
 		else
 		{
-			return boost::string_ref(&addr[p_buffer], fsize - p_buffer);
+			return std_exp::string_view(&addr[p_buffer], fsize - p_buffer);
 		}
 	}
 
@@ -94,6 +96,29 @@ private:
 };
 
 
+std::vector<std_exp::string_view> split(const std_exp::string_view& line, const char& sep)
+{
+	std::vector<std_exp::string_view> v;
+	v.reserve(30);
+
+	size_t last = 0, i = 0;
+	for (; i < line.length(); i++)
+	{
+		if (line[i] == sep)
+		{
+			v.push_back(std_exp::string_view(&line[last], (i - last)));
+			i++;
+			last = i;
+		}
+	}
+
+	if (last < i)
+		v.push_back(std_exp::string_view(&line[last], (i - last - 1)));
+
+	return v;
+}
+
+
 template <typename F>
 void splitter(const string& fname, const string& separator, F fun, size_t skip_line)
 {
@@ -108,16 +133,13 @@ void splitter(const string& fname, const string& separator, F fun, size_t skip_l
 		skipped++;
 	}
 
-
 	while (!reader.is_finished())
 	{
-		const boost::string_ref line = reader.get_line();
+		const std_exp::string_view line = reader.get_line();
 		if (line.empty())
 			continue;
 
-		std::vector<std::string> repos;
-		boost::split(repos, line, sep);
-		fun(repos);
+		fun(split(line, separator[0]));
 	}
 }
 
@@ -180,13 +202,13 @@ public:
 		state = XXH64_createState();
 	}
 
-	uint64_t hash(const vector<string>& line)
+	uint64_t hash(const std::vector<std_exp::string_view>& line)
 	{
 		XXH64_reset(state, 0);
 		for (const auto k : _key_index)
 		{
 			//cout << (state != nullptr) << " " << k << " " << line[k] << " " << line[k].size() << std::endl;
-			XXH64_update(state, (line[k].c_str()), line[k].size());
+			XXH64_update(state, (line[k].data()), line[k].size());
 		}
 		return XXH64_digest(state);
 	}
@@ -200,6 +222,15 @@ private:
 	XXH64_state_t* state;
 	const vector<uint32_t>& _key_index;
 };
+
+
+int64_t fast_atol(const std_exp::string_view& str)
+{
+	int64_t val = 0;
+	for (const auto& v : str)
+		val = val*10 + (v - '0');
+	return val;
+}
 
 
 void help();
@@ -222,7 +253,7 @@ int main(int argc, char* argv[])
 
 	map<string, string> registers;
 
-	bool dry_run_exec{false}, multi_thread{false};
+	bool dry_run_exec{false};
 	size_t skip_line{0};
 	string output_header{};
 
@@ -309,16 +340,16 @@ int main(int argc, char* argv[])
 
 	for (const auto& fname : fnames)
 	{
-		splitter(fname, input_sep, [&map_object, &sum_fields, &keys_fields, &no_value, &non_valid, &key_builder](const vector<string>& v)
+		splitter(fname, input_sep, [&map_object, &sum_fields, &keys_fields, &no_value, &non_valid, &key_builder](const std::vector<std_exp::string_view>& v)
 		{
 			//( value , is_valid )
 			vector<pair<int64_t, bool>> partial(sum_fields.size());
-			map<uint32_t, string> partial_prj;
 
 			size_t j{};
 			for(const auto& index : sum_fields)
 			{
-				int64_t n = std::stol(v[index]);
+				//int64_t n = std::stol(v[index]);
+				int64_t n = fast_atol(v[index]);
 				if(n != no_value)
 					partial[j] = make_pair(n, true);
 				else
@@ -326,9 +357,6 @@ int main(int argc, char* argv[])
 				j++;
 			}
 			
-			for(const auto& index : keys_fields)
-				partial_prj[index] = v[index];
-
 			const uint64_t key = key_builder.hash(v);
 			auto it = map_object.find(key);
 			if(it != map_object.end())
@@ -352,8 +380,11 @@ int main(int argc, char* argv[])
 			}
 			else
 			{
-				map_object[key].sum_val = partial;
-				map_object[key].prj_val = partial_prj;
+				auto& obj = map_object[key];
+				for(const auto& index : keys_fields)
+					obj.prj_val[index] = v[index].to_string();
+
+				obj.sum_val = partial;
 			}
 		}, skip_line);
 	}

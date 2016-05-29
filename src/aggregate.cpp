@@ -1,12 +1,17 @@
 #include <iostream>
+
 #include <thread>
+#include <atomic>
+#include <mutex>
 #include <vector>
+#include <queue>
 #include <map>
 #include <unordered_map>
 #include <fstream>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/utility/string_ref.hpp> 
+#include <boost/lockfree/stack.hpp>
 
 #include <xxhash.h>
 
@@ -108,15 +113,16 @@ void splitter(const string& fname, const string& separator, F fun, size_t skip_l
 		skipped++;
 	}
 
+
 	while (!reader.is_finished())
 	{
 		const boost::string_ref line = reader.get_line();
-		if (!line.empty())
-		{
-			vector<string> strs;
-			boost::split(strs, line, sep);
-			fun(strs);
-		}
+		if (line.empty())
+			continue;
+
+		std::vector<std::string> repos;
+		boost::split(repos, line, sep);
+		fun(repos);
 	}
 }
 
@@ -134,8 +140,8 @@ vector<uint32_t> get_index_uint32(const string& index)
 		auto p = k.find("-");
 		if(p != string::npos)
 		{
-			const auto b = stoi(k.substr(0, p));
-			const auto e = stoi(k.substr(p+1));
+			const auto b = stoull(k.substr(0, p));
+			const auto e = stoull(k.substr(p+1));
 			for(size_t n = b; n <= e; n++)
 				indexs.push_back(n);
 		}
@@ -159,8 +165,8 @@ vector<string> get_index_string(const string& index)
 		auto p = k.find("-");
 		if(p != string::npos)
 		{
-			const auto b = stoi(k.substr(0, p));
-			const auto e = stoi(k.substr(p+1));
+			const auto b = stoull(k.substr(0, p));
+			const auto e = stoull(k.substr(p+1));
 			for(size_t n = b; n <= e; n++)
 				indexs.push_back(to_string(n));
 		}
@@ -185,7 +191,7 @@ public:
 		for (const auto k : _key_index)
 		{
 			//cout << (state != nullptr) << " " << k << " " << line[k] << " " << line[k].size() << std::endl;
-			XXH64_update(state, (void*)line[k].c_str(), line[k].size());
+			XXH64_update(state, (line[k].c_str()), line[k].size());
 		}
 		return XXH64_digest(state);
 	}
@@ -231,7 +237,7 @@ int main(int argc, char* argv[])
 	string input_sep{","}, output_sep{","};
 	string output_file{"out.csv"};
 
-	size_t i{};
+	int i{};
 	while(i < argc)
 	{
 		if (strcmp(argv[i], "--help") == 0)
@@ -364,29 +370,29 @@ int main(int argc, char* argv[])
 		fout << output_header << endl;
 
 
-	auto get = [&sum_fields, &keys_fields, &no_value](uint32_t k, const mapval_t<int64_t>& o, auto printer) {
+	auto get = [&sum_fields, &keys_fields, &no_value](uint32_t k, const mapval_t<int64_t>& mval, auto printer) {
 		const auto it = find(sum_fields.begin(), sum_fields.end(), k);
 		if (it != sum_fields.end())
 		{
 			// is a sum fields
-			const auto v = o.sum_val[it - sum_fields.begin()];
-			if (v.second)
-				printer(v.first);
+			const auto val = mval.sum_val[it - sum_fields.begin()];
+			if (val.second)
+				printer(val.first);
 			else
 				printer(no_value);
 		}
 		else
 		{
 			const auto kt = find(keys_fields.begin(), keys_fields.end(), k);
-			printer(o.prj_val.at(*kt));
+			printer(mval.prj_val.at(*kt));
 		}
 	};
 
 
-	auto print = [&output_sep, &fout](const auto& v, bool& f) {
-		if (f) { fout << v; f = false; }
+	auto print = [&output_sep, &fout](const auto& val_print, bool& flag) {
+		if (flag) { fout << val_print; flag = false; }
 		else
-			fout << output_sep << v;
+			fout << output_sep << val_print;
 	};
 
 
@@ -404,7 +410,7 @@ int main(int argc, char* argv[])
 			if (e[0] == '%')
 				print(registers[e], f);
 			else
-				get(proj_fields_n[j], o.second, [&](const auto& v){ print(v, f); });
+				get(proj_fields_n[j], o.second, [&print, &f](const auto& v){ print(v, f); });
 			j++;
 		}
 
@@ -515,7 +521,7 @@ void dry_run (
 			const auto bad_sum = count_if(sum_fields.begin(), sum_fields.end(), [&strs](const uint32_t& e){ return e >= strs.size(); });
 			const auto bad_prj = count_if(proj_fields.begin(), proj_fields.end(), [&strs](const string& e){
 				if (e.find("%") == string::npos)
-					return stoi(e) >= strs.size();
+					return stoull(e) >= strs.size();
 				return false;
 			});
 

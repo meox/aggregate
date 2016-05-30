@@ -1,5 +1,5 @@
 # Aggregation Tool 1.4.0   [![Build Status](https://travis-ci.org/meox/aggregate.svg?branch=master)](https://travis-ci.org/meox/aggregate)
-fast C++14 tool for CSV aggragation
+fast CSV aggragation tool for Unix
 
 ###command line options
 ```

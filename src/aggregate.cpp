@@ -35,7 +35,6 @@ struct mapval_t
 {
 	std::vector<std::pair<T, bool>> sum_val;
 	std::vector<std::string> key_val;
-	//std::map<uint32_t, std::string> prj_val;
 };
 
 

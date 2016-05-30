@@ -34,7 +34,8 @@ template <typename T>
 struct mapval_t
 {
 	std::vector<std::pair<T, bool>> sum_val;
-	std::map<uint32_t, std::string> prj_val;
+	std::vector<std::string> key_val;
+	//std::map<uint32_t, std::string> prj_val;
 };
 
 
@@ -356,10 +357,11 @@ int main(int argc, char* argv[])
 
 	//( value , is_valid )
 	std::vector<std::pair<int64_t, bool>> partial(sum_fields.size());
+	const size_t ksize = keys_fields.size();
 
 	for (const auto& fname : fnames)
 	{
-		splitter(fname, input_sep, [&map_object, &partial, &sum_fields, &keys_fields, &no_value, &non_valid, &key_builder](const std::vector<std_exp::string_view>& v)
+		splitter(fname, input_sep, [&map_object, &partial, &sum_fields, &ksize, &keys_fields, &no_value, &non_valid, &key_builder](const std::vector<std_exp::string_view>& v)
 		{
 			for (const auto& index : sum_fields)
 			{
@@ -396,8 +398,9 @@ int main(int argc, char* argv[])
 			else
 			{
 				auto& obj = map_object[key];
+				obj.key_val.resize(ksize);
 				for (const auto& index : keys_fields)
-					obj.prj_val[index.first] = v[index.first].to_string();
+					obj.key_val[index.second] = v[index.first].to_string();
 
 				obj.sum_val = partial;
 			}
@@ -417,7 +420,6 @@ int main(int argc, char* argv[])
 		{
 			// is a sum fields
 			const auto& val = mval.sum_val.at(it->second);
-			//std::cerr << "S: " << k << ", it->second: " << it->second << ", v: " << val.second << "/" << val.first << std::endl;
 			if (val.second)
 				printer(val.first);
 			else
@@ -425,8 +427,8 @@ int main(int argc, char* argv[])
 		}
 		else
 		{
-			//std::cerr << "P: " << k << ", size: " << mval.prj_val.size() << ", v: " << mval.prj_val.at(k) << std::endl;
-			printer(mval.prj_val.at(k));
+			const auto jt = keys_fields.find(k);
+			printer(mval.key_val.at(jt->second));
 		}
 	};
 
@@ -455,7 +457,7 @@ int main(int argc, char* argv[])
 			j++;
 		}
 
-		fout << "\n";
+		fout << '\n';
 	}
 
 	fout.close();

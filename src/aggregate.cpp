@@ -71,10 +71,7 @@ public:
 
 	bool is_finished() const { return end_reached; }
 	
-	~Reader()
-	{
-		munmap(addr, fsize);
-	}
+	~Reader() { munmap(addr, fsize); }
 
 private:
 	inline size_t get_end_line()
@@ -116,8 +113,11 @@ std::vector<std_exp::string_view> split(const std_exp::string_view& line, char s
 		}
 	}
 
-	if (last < i)
-		v.push_back(std_exp::string_view(&line[last], (i - last - 1)));
+	//std::cerr << "last: " << last << ", i = " << i << std::endl;
+	if (i - last > 1)
+		v.push_back(std_exp::string_view(&line[last], (i - last)));
+	else
+		v.push_back(std_exp::string_view(""));
 
 	reservation = c + 1;
 	return v;
@@ -128,8 +128,6 @@ template <typename F>
 void splitter(const string& fname, const string& separator, F fun, size_t skip_line)
 {
 	Reader reader{fname};
-
-	const auto sep = boost::is_any_of(separator);
 	size_t skipped{0};
 
 	while (!reader.is_finished() && skipped < skip_line)
@@ -194,7 +192,7 @@ std::vector<std::string> get_index_string(const std::string& index)
 			const auto b = stoull(k.substr(0, p));
 			const auto e = stoull(k.substr(p+1));
 			for(size_t n = b; n <= e; n++)
-				indexs.push_back(to_string(n));
+				indexs.push_back(std::to_string(n));
 		}
 		else
 			indexs.push_back(k);
@@ -216,10 +214,7 @@ public:
 	{
 		XXH64_reset(state, 0);
 		for (const auto k : _key_index)
-		{
-			//cout << (state != nullptr) << " " << k << " " << line[k] << " " << line[k].size() << std::endl;
-			XXH64_update(state, line[k.second].data(), line[k.second].size());
-		}
+			XXH64_update(state, line[k.first].data(), line[k.first].size());
 		return XXH64_digest(state);
 	}
 
@@ -270,7 +265,7 @@ int main(int argc, char* argv[])
 {
 	std::map<uint32_t, uint32_t> sum_fields;
 	std::map<uint32_t, uint32_t> keys_fields;
-	vector<string> proj_fields;
+	std::vector<std::string> proj_fields;
 
 	std::map<std::string, std::string> registers;
 
@@ -366,36 +361,35 @@ int main(int argc, char* argv[])
 	{
 		splitter(fname, input_sep, [&map_object, &partial, &sum_fields, &keys_fields, &no_value, &non_valid, &key_builder](const std::vector<std_exp::string_view>& v)
 		{
-			size_t j{};
 			for (const auto& index : sum_fields)
 			{
 				int64_t n = fast_atol(v[index.first]);
 				//std::cerr << "f: " << index.first << ", s: " << index.second << ", n: " << n << std::endl;
 				if(n != no_value)
-					partial[j] = make_pair(n, true);
+					partial[index.second] = make_pair(n, true);
 				else
-					partial[j] = non_valid;
-				j++;
+					partial[index.second] = non_valid;
 			}
 			
 			const uint64_t key = key_builder.hash(v);
+			
 			auto it = map_object.find(key);
 			if (it != map_object.end())
 			{
 				//exists
-				transform(
+				std::transform(
 					it->second.sum_val.begin(), it->second.sum_val.end(),
 					partial.begin(), it->second.sum_val.begin(),
 					[](const pval_t& a, const pval_t& b)
 					{
 						if (a.second == true && b.second == true)
-							return make_pair(a.first + b.first, true);
+							return std::make_pair(a.first + b.first, true);
 						else if (a.second == true && b.second == false)
-							return make_pair(a.first, true);
+							return std::make_pair(a.first, true);
 						else if (a.second == false && b.second == true)
-							return make_pair(b.first, true);
+							return std::make_pair(b.first, true);
 						else
-							return make_pair(static_cast<int64_t>(0), false);
+							return std::make_pair(static_cast<int64_t>(0), false);
 					}
 				);
 			}
@@ -422,8 +416,8 @@ int main(int argc, char* argv[])
 		if (it != sum_fields.end())
 		{
 			// is a sum fields
-			const auto val = mval.sum_val.at(it->second);
-			//std::cerr << "S: " << k << ", v: " << val.second << "/" << val.first << std::endl;
+			const auto& val = mval.sum_val.at(it->second);
+			//std::cerr << "S: " << k << ", it->second: " << it->second << ", v: " << val.second << "/" << val.first << std::endl;
 			if (val.second)
 				printer(val.first);
 			else
@@ -431,7 +425,7 @@ int main(int argc, char* argv[])
 		}
 		else
 		{
-			//std::cerr << "P: " << k << ", v: " << kt->second << std::endl;
+			//std::cerr << "P: " << k << ", size: " << mval.prj_val.size() << ", v: " << mval.prj_val.at(k) << std::endl;
 			printer(mval.prj_val.at(k));
 		}
 	};
@@ -445,7 +439,7 @@ int main(int argc, char* argv[])
 
 
 	std::vector<uint32_t> proj_fields_n;
-	std::transform(proj_fields.begin(), proj_fields.end(), std::back_inserter(proj_fields_n), [](const auto& e){ return std::stoi(e); });
+	std::transform(proj_fields.begin(), proj_fields.end(), std::back_inserter(proj_fields_n), [](const std::string& e){ return std::stoul(e); });
 
 	//show aggregate
 	for (const auto& o : map_object)

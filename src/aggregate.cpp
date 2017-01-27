@@ -7,7 +7,8 @@
 #include <fstream>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
-#include <experimental/string_view>
+#include <boost/utility/string_view.hpp>
+//#include <experimental/string_view>
 #include <xxhash.h>
 
 #include <fcntl.h>
@@ -25,7 +26,7 @@
 
 using namespace boost::filesystem;
 using namespace std;
-namespace std_exp = std::experimental;
+//namespace std_exp = std::experimental;
 
 
 typedef pair<int64_t, bool> pval_t;
@@ -50,7 +51,7 @@ public:
 		addr = static_cast<char*>(mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0));
 	}
 
-	std_exp::string_view get_line()
+	boost::string_view get_line()
 	{
 		if (addr == nullptr || end_reached)
 			return "";
@@ -59,13 +60,13 @@ public:
 		if (end_line_pos != std::string::npos)
 		{
 			const auto diff = end_line_pos - p_buffer;
-			std_exp::string_view r = std_exp::string_view(&addr[p_buffer], diff);
+			boost::string_view r = boost::string_view(&addr[p_buffer], diff);
 			p_buffer += diff+1;
 			return r;
 		}
 		else
 		{
-			return std_exp::string_view(&addr[p_buffer], fsize - p_buffer);
+			return boost::string_view(&addr[p_buffer], fsize - p_buffer);
 		}
 	}
 
@@ -93,10 +94,10 @@ private:
 };
 
 inline
-std::vector<std_exp::string_view> split(const std_exp::string_view& line, char sep)
+std::vector<boost::string_view> split(const boost::string_view& line, char sep)
 {
 	static size_t reservation = 0;
-	std::vector<std_exp::string_view> v;
+	std::vector<boost::string_view> v;
 	if (reservation != 0)
 		v.reserve(reservation);
 
@@ -106,7 +107,7 @@ std::vector<std_exp::string_view> split(const std_exp::string_view& line, char s
 	{
 		if (line[i] == sep)
 		{
-			v.push_back(std_exp::string_view(&line[last], (i - last)));
+			v.push_back(boost::string_view(&line[last], (i - last)));
 			i++;
 			last = i;
 			c++;
@@ -115,9 +116,9 @@ std::vector<std_exp::string_view> split(const std_exp::string_view& line, char s
 
 	//std::cerr << "last: " << last << ", i = " << i << std::endl;
 	if (i - last > 1)
-		v.push_back(std_exp::string_view(&line[last], (i - last)));
+		v.push_back(boost::string_view(&line[last], (i - last)));
 	else
-		v.push_back(std_exp::string_view(""));
+		v.push_back(boost::string_view(""));
 
 	reservation = c + 1;
 	return v;
@@ -138,7 +139,7 @@ void splitter(const string& fname, const string& separator, F fun, size_t skip_l
 
 	while (!reader.is_finished())
 	{
-		const std_exp::string_view line = reader.get_line();
+		const boost::string_view line = reader.get_line();
 		if (line.empty())
 			continue;
 
@@ -210,7 +211,7 @@ public:
 		state = XXH64_createState();
 	}
 
-	uint64_t hash(const std::vector<std_exp::string_view>& line)
+	uint64_t hash(const std::vector<boost::string_view>& line)
 	{
 		XXH64_reset(state, 0);
 		for (const auto k : _key_index)
@@ -229,7 +230,7 @@ private:
 };
 
 
-int64_t fast_atol(const std_exp::string_view& str)
+int64_t fast_atol(const boost::string_view& str)
 {
 	size_t i;
 	int64_t val{};
@@ -384,7 +385,7 @@ int main(int argc, char* argv[])
 
 	for (const auto& fname : fnames)
 	{
-		splitter(fname, input_sep, [&map_object, &partial, &sum_fields, &ksize, &keys_fields, &no_value, &non_valid, &key_builder](const std::vector<std_exp::string_view>& v)
+		splitter(fname, input_sep, [&map_object, &partial, &sum_fields, &ksize, &keys_fields, &no_value, &non_valid, &key_builder](const std::vector<boost::string_view>& v)
 		{
 			for (const auto& index : sum_fields)
 			{

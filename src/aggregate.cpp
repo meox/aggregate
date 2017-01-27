@@ -297,7 +297,7 @@ int main(int argc, char* argv[])
 	std::string input_sep{","}, output_sep{","};
 	std::string output_file{"out.csv"};
 
-	if (argc == 0)
+	if (argc == 1)
 	{
 		help();
 		return 0;

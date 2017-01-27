@@ -297,6 +297,12 @@ int main(int argc, char* argv[])
 	std::string input_sep{","}, output_sep{","};
 	std::string output_file{"out.csv"};
 
+	if (argc == 0)
+	{
+		help();
+		return 0;
+	}
+
 	int i{};
 	while(i < argc)
 	{

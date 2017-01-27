@@ -231,21 +231,39 @@ private:
 
 int64_t fast_atol(const std_exp::string_view& str)
 {
+	size_t i;
 	int64_t val{};
-	size_t i{};
 	const size_t l{str.length()};
 	bool negative{false};
 
 	if (l == 0) return 0;
 
-	if (str[0] == '-') { i = 1; negative = true; }
-	else if (str[0] == '+') { i = 1; }
+	switch(str[0])
+	{
+		case '-':
+		{
+			i = 1;
+			negative = true;
+			break;
+		}
+		case '+':
+		{
+			i = 1;
+			break;
+		}
+		default:
+		{
+			i = 0;
+		}
+	}
 
 	for (; i < l; i++)
 		val = val*10 + (str[i] - '0');
 
-	if (negative) return -val;
-	else return val;
+	if (negative)
+		return -val;
+	else
+		return val;
 }
 
 
@@ -440,7 +458,18 @@ int main(int argc, char* argv[])
 
 
 	std::vector<uint32_t> proj_fields_n;
-	std::transform(proj_fields.begin(), proj_fields.end(), std::back_inserter(proj_fields_n), [](const std::string& e){ return std::stoul(e); });
+	std::transform(
+		proj_fields.begin(),
+		proj_fields.end(),
+		std::back_inserter(proj_fields_n),
+		[](const std::string& e) -> unsigned long {
+			try {
+				return std::stoul(e);
+			} catch (...) {
+				return 0;
+			}
+		}
+	);
 
 	//show aggregate
 	for (const auto& o : map_object)
@@ -569,11 +598,11 @@ void dry_run (
 			});
 
 			if (bad_keys > 0)
-				cout << "There are " << bad_keys << " elements in Keys list that exceded the total number of fields";
+				cout << "There are " << bad_keys << " elements in Keys list that exceded the total number of fields" << endl;
 			if (bad_sum > 0)
-				cout << "There are " << bad_sum << " elements in Aggregation list that exceded the total number of fields";
+				cout << "There are " << bad_sum << " elements in Aggregation list that exceded the total number of fields" << endl;
 			if (bad_prj > 0)
-				cout << "There are " << bad_prj << " elements in Projection list that exceded the total number of fields";
+				cout << "There are " << bad_prj << " elements in Projection list that exceded the total number of fields" << endl;
 		}
 
 		cout << endl;

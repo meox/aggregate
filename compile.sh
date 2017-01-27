@@ -1,9 +1,9 @@
 #!/bin/bash
 
-CXX=g++-4.9
-CC=gcc-4.9
+CXX=g++
+CC=gcc
 
-CXXFLAGS="-O3 -std=c++1y -Wall -Wextra -Wshadow -Wcast-qual -Wcast-align -Wswitch-enum -Wundef -pedantic"
+CXXFLAGS="-O3 -g -std=c++14 -Wall -Wextra -Wshadow -Wcast-qual -Wcast-align -Wswitch-enum -Wundef -pedantic"
 CCFLAGS="-O3 -std=c99 -Wall -Wextra -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wstrict-aliasing=1 -Wswitch-enum -Wundef -pedantic"
 
 $CC $CCFLAGS -c xxHash/xxhash.c

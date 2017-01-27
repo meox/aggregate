@@ -423,7 +423,7 @@ int main(int argc, char* argv[])
 				auto& obj = map_object[key];
 				obj.key_val.resize(ksize);
 				for (const auto& index : keys_fields)
-					obj.key_val[index.second] = v[index.first].to_string();
+					obj.key_val[index.second] = v.at(index.first).to_string();
 
 				obj.sum_val = partial;
 			}

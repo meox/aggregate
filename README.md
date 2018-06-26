@@ -1,7 +1,7 @@
 # Aggregation Tool 1.4.1   [![Build Status](https://travis-ci.org/meox/aggregate.svg?branch=master)](https://travis-ci.org/meox/aggregate)
 fast CSV aggragation tool for Unix
 
-###command line options
+## Command line options
 ```
 aggregate [options]
 -k               are the keys-elements used for aggregation
@@ -21,7 +21,7 @@ aggregate [options]
 --version        print the version number and exit
 ```
 
-This is an example:
+Example:
 
 ./aggregate -r %t:1982 -k "2-20" -s "21-35" -p "%t;1-35" --skip-line 1 --path /home/meox/rawcsv --reuse-skipped --output-file out.csv
 

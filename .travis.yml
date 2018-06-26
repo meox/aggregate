@@ -5,17 +5,17 @@ compiler:
     - gcc
 
 install:
-- if [ "$CXX" = "g++" ]; then export CXX="g++-4.9" CC="gcc-4.9"; fi
+- if [ "$CXX" = "g++" ]; then export CXX="g++-7.2" CC="gcc-7.2"; fi
 addons:
   apt:
     sources:
     - ubuntu-toolchain-r-test
     - boost-latest
     packages:
-    - gcc-4.9
-    - g++-4.9
-    - libboost1.55-dev
-    - libboost-filesystem1.55-dev
+    - gcc-7.2
+    - g++-7.2
+    - libboost1.66-dev
+    - libboost-filesystem1.66-dev
 
 script: ./compile.sh
 
